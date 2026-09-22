@@ -377,9 +377,16 @@ namespace HookAlerter
                 // There is deliberately NO size rule. Whether a small nugget is worth taking is the
                 // player's business, not this program's - if the pointer is on something that reads
                 // as a valuable object, that is the only question that matters.
-                if (rock * 2 >= obj) return Rock;
-                if (dia * 2 >= obj) return Diamond;
+                // Order matters: the MOST SPECIFIC colour wins, not the most common. The grey test
+                // is only "more than half the pixels are low-saturation", and a money bag's body is
+                // cream - low saturation - so testing rock first classified the bag as a rock and the
+                // tool refused to aim at it. The user hit exactly that: the pointer sat on the
+                // question-mark bag, the ray geometry was right (-66.2deg at the bag), and the status
+                // line read "(rock)" so no dashed line ever appeared. Bag and diamond have their own
+                // dedicated pixel tests, so they are strictly more informative than "mostly grey".
                 if (bag * 2 >= obj) return Bag;
+                if (dia * 2 >= obj) return Diamond;
+                if (rock * 2 >= obj) return Rock;
                 return GoldT;
             }
             return None;
