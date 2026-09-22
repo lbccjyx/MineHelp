@@ -748,6 +748,53 @@ namespace HookAlerter
         /// by JumpRejects, which is incremented only on a jump reject. Kept (and still written) only
         /// because removing it would touch seven call sites; it has no effect on behaviour.</summary>
         public int LostFrames;
+        /// <summary>Pixels that passed the colour+motion tests this frame, BEFORE the geometric
+        /// gates. Kept so the tracker can explain why it chose one blob over another - the user
+        /// could see the hook at -66 while the tracker reported -37, and nothing in any log said
+        /// what else was on offer.</summary>
+        public List<int> CandidateMask = new List<int>();
+
+        /// <summary>Summarise the candidate pixels as blobs with their radius and angle from the
+        /// pivot, so the run loop can log what the tracker had to choose from.</summary>
+        public string DescribeCandidates(int w)
+        {
+            if (CandidateMask.Count == 0) return "none";
+            List<int> pts = new List<int>(CandidateMask);
+            pts.Sort();
+            List<string> parts = new List<string>();
+            List<int> used = new List<int>();
+            for (int i = 0; i < pts.Count && parts.Count < 4; i++)
+            {
+                if (used.Contains(pts[i])) continue;
+                int seed = pts[i];
+                int sx0 = seed % w, sy0 = seed / w;
+                double cx = 0, cy = 0; int cnt = 0;
+                // Bounded flood over the sorted candidate set: a pixel joins the blob if it is
+                // within 3px of one already in it. Cheap and enough to separate the hook from the
+                // winch, which are tens of pixels apart.
+                List<int> blob = new List<int>();
+                blob.Add(seed); used.Add(seed);
+                for (int k = 0; k < blob.Count && blob.Count < 4000; k++)
+                {
+                    int q = blob[k];
+                    int qx = q % w, qy = q / w;
+                    foreach (int r in pts)
+                    {
+                        if (used.Contains(r)) continue;
+                        int rx = r % w, ry = r / w;
+                        if (Math.Abs(rx - qx) <= 3 && Math.Abs(ry - qy) <= 3) { blob.Add(r); used.Add(r); }
+                    }
+                }
+                for (int k = 0; k < blob.Count; k++) { cx += blob[k] % w; cy += blob[k] / w; cnt++; }
+                if (cnt == 0) continue;
+                cx /= cnt; cy /= cnt;
+                double dx = cx - PivotX, dy = cy - PivotY;
+                parts.Add(string.Format(CultureInfo.InvariantCulture,
+                    "n={0} c=({1:F0},{2:F0}) ang={3:F1} r={4:F0}",
+                    cnt, cx, cy, Math.Atan2(dx, dy) * 180 / Math.PI, Math.Sqrt(dx * dx + dy * dy)));
+            }
+            return string.Join(" | ", parts.ToArray());
+        }
         /// <summary>Why the last TrackHook call gave up; empty on success. Logged (rate limited) by
         /// the run loop, because previously NO log field recorded a tracking failure at all - the
         /// only trace was a status string, so "the hook is invisible" was undiagnosable.</summary>
@@ -935,6 +982,8 @@ namespace HookAlerter
                                out double hx, out double hy, out int count)
         {
             double sx = 0, sy = 0; int n = 0;
+            LastCandidates.Clear();
+            CandidateMask.Clear();
             int x0 = Math.Max(0, box.Left), x1 = Math.Min(cur.W - 1, box.Right);
             int y0 = Math.Max(0, box.Top), y1 = Math.Min(cur.H - 1, box.Bottom);
             for (int y = y0; y <= y1; y++)
@@ -945,6 +994,9 @@ namespace HookAlerter
                     int d = Math.Abs(Cls.R(a) - Cls.R(b)) + Math.Abs(Cls.G(a) - Cls.G(b)) + Math.Abs(Cls.B(a) - Cls.B(b));
                     if (d <= 45) continue;
                     if (!Cls.Gray(a)) continue;
+                    // Everything below passed the COLOUR and MOTION tests. Record it before the
+                    // geometry gates so the candidate dump can show what the gates then removed.
+                    CandidateMask.Add(p);
                     // The hook only ever hangs BELOW the winch, inside the swing arc. The search box
                     // reaches 70px above the predicted hook, which put the miner's grey hair and
                     // beard and the winch drum inside it - grey, always moving, and right at the

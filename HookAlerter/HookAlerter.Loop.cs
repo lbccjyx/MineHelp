@@ -54,6 +54,7 @@ namespace HookAlerter
             DateTime lastTraceLog = DateTime.MinValue;
             DateTime lastCalTry = DateTime.MinValue;
             DateTime lastNoFocusLog = DateTime.MinValue;
+            DateTime lastCandLog = DateTime.MinValue;
             DateTime lastJumpAt = DateTime.Now, sampleAt = DateTime.Now;
             DateTime lastReturnSeen = DateTime.MinValue;
 
@@ -721,6 +722,19 @@ namespace HookAlerter
                                 Console.WriteLine(trace[(traceI - traceCount + k + trace.Length * 3) % trace.Length]);
                             Console.WriteLine(rec);
                             tracing = true; traceAfter = 25;
+                        }
+                        else if ((DateTime.Now - lastCandLog).TotalSeconds > 2.0)
+                        {
+                            // What the tracker had to choose from. The user could see the hook at
+                            // -66 while it reported -37, and no log field said what else was on
+                            // offer - so this prints every moving grey blob in the search box with
+                            // its angle and radius. Two seconds is enough to catch a swing without
+                            // flooding the log.
+                            lastCandLog = DateTime.Now;
+                            Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                                "[cand] picked ang={0:F1} r={1:F0} | blobs: {2}",
+                                v.Angle * 180 / Math.PI, v.HookR,
+                                v.DescribeCandidates(cap.ClientScreenRect.Width > 0 ? cap.ClientScreenRect.Width : 1930)));
                         }
                         else if ((DateTime.Now - lastTraceLog).TotalSeconds > 1.0 && haveTarget)
                         {
