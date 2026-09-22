@@ -51,6 +51,7 @@ namespace HookAlerter
             bool stuckReleased = false;
             double stallAngle = 999; DateTime stallAt = DateTime.Now;
             DateTime lastRejectLog = DateTime.MinValue;
+            DateTime lastTraceLog = DateTime.MinValue;
             DateTime lastJumpAt = DateTime.Now, sampleAt = DateTime.Now;
             DateTime lastReturnSeen = DateTime.MinValue;
 
@@ -675,6 +676,17 @@ namespace HookAlerter
                                 Console.WriteLine(trace[(traceI - traceCount + k + trace.Length * 3) % trace.Length]);
                             Console.WriteLine(rec);
                             tracing = true; traceAfter = 25;
+                        }
+                        else if ((DateTime.Now - lastTraceLog).TotalSeconds > 1.0 && haveTarget)
+                        {
+                            // Heartbeat. Until now [trace] existed ONLY around a shot, so a session
+                            // that never fired produced no trace at all and "why didn't it fire" was
+                            // unanswerable - exactly what happened when the user waited 20 seconds
+                            // for a gold nugget and hooked it by hand. One line per second (not per
+                            // frame: ~18x cheaper) while a target is under the pointer, carrying the
+                            // same fields the fire decision uses.
+                            lastTraceLog = DateTime.Now;
+                            Console.WriteLine(rec);
                         }
                         else if (tracing)
                         {
