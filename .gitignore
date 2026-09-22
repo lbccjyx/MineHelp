@@ -1,0 +1,34 @@
+# The workspace root is the GAME INSTALLATION directory (Steam). Never commit it.
+GOLD.exe
+GoldMiner.exe
+GoldMiner2P.exe
+adl64.exe
+steam_api64.dll
+steam_appid.txt
+*.bat
+Engine/
+GoldMiner/
+Legacy/
+Manifest_*.txt
+NotoSansSC-OFL.txt
+Ruffle-LICENSE-THIRD-PARTY.txt
+return.txt
+status.txt
+_capture_printwindow.png
+
+# Build output and runtime artifacts
+HookAlerter/HookAlerter.exe
+HookAlerter/hookalerter.ini
+HookAlerter/hookalerter.log
+HookAlerter/calib_last.png
+HookAlerter/diag/
+
+# Diagnostic history: logs are 1-2 MB each and were 15x the size of the source.
+HookAlerter/_dev/*.log
+HookAlerter/_dev/*.retired
+HookAlerter/_dev/single_ref.cs
+HookAlerter/_dev/single_ref.exe
+HookAlerter/_dev/bounds.csv
+
+# Large reference screenshots used only for --analyze smoke tests.
+HookAlerter/_dev/ref/*.png
