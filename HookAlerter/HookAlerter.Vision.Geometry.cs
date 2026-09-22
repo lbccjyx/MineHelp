@@ -974,16 +974,13 @@ namespace HookAlerter
                         // believed "deployed" used to skip the whole test and admit a blob 26px out
                         // - which then fired two shots wildly off target.
                         if (dist < BaseR * 0.80) continue;
-                        // The upper bound only makes sense while it is at rest - and 1.60 was too
-                        // tight for the very case it governs. As the hook swings to a wide angle the
-                        // rope becomes longer and more slanted on screen, so more rope pixels fall
-                        // inside the search box and drag the centroid OUTWARD along the rope. Past
-                        // 1.60*BaseR (69.6px) the whole frame was then silently dropped, which cut
-                        // the tracked swing off early: the user sees at most -35 degrees at rest,
-                        // against -50..-63 once the hook has been fired and this bound no longer
-                        // applies. 2.40*BaseR (~104px) still rejects a genuinely distant blob while
-                        // leaving room for the rope's pull.
-                        if (!HookDeployed && dist > BaseR * 2.40) continue;
+                        // REVERTED to 1.60. Widening it to 2.40 was a HYPOTHESIS - that rope pixels
+                        // drag the centroid outward at wide angles and the ceiling was clipping the
+                        // swing - and the user disproved it on the next run: the tracked angle was
+                        // still -37 while the hook was visibly at -66. That is not a clipping
+                        // artefact, it is the tracker holding a different object, so the ceiling was
+                        // never the cause and the change is not kept.
+                        if (!HookDeployed && dist > BaseR * 1.60) continue;
                     }
                     bool inRock = false;
                     foreach (Rectangle r0 in StaticRocks)
