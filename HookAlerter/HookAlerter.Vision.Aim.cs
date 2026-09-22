@@ -37,6 +37,22 @@ namespace HookAlerter
             Reject = "";
             if (!HookPixels(f, Prev, HookBox(), out hx, out hy, out cnt))
             {
+                // COAST THROUGH A TURNING POINT. HookPixels needs pixels that CHANGED since the
+                // previous frame, and at the ends of the swing the hook momentarily stops - so it
+                // produces none and every extreme frame was rejected as "lost". The tracker was
+                // therefore blind exactly where targets usually sit, and the swing it reported was
+                // narrower than the real one: a live log showed ang confined to -55.2..+48.2 while
+                // the pointer sat at -67.2, so the bag was 12 degrees beyond a range the tool
+                // believed was the whole swing. crossed=1 fired only 11 times in 678 frames for the
+                // same reason. The hook IS there, it is just briefly still, so keep the last angle
+                // for a bounded number of frames instead of counting a loss. Bounded, because a
+                // genuine loss must still be detectable.
+                if (HaveAngle && NoHookFrames < 15 && Math.Abs(Omega) < 0.30
+                    && BaseR > 6 && HookR > BaseR * 0.65 && HookR < BaseR * 1.6)
+                {
+                    Reject = "coasting through a turning point";
+                    return true;
+                }
                 Reject = Why(string.Format(CultureInfo.InvariantCulture, "no pixels (n={0}) box={1}", cnt, HookBox()));
                 NoHookFrames++;
                 // Losing the hook does NOT mean it was fired. This used to latch "deployed" on 7
