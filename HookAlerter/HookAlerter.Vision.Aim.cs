@@ -81,15 +81,18 @@ namespace HookAlerter
             // below the pixel floor (minimum 26.25px), and a point that close to the pivot sweeps tens
             // of degrees for a few pixels of jitter.
             //
-            // The factor is 0.65, NOT 0.80, and there is no upper bound:
-            //  * An independent audit measured the real resting radius at 42-45px. With BaseR now
-            //    corrected to 0.052*Field.Height (~43px) a 0.80 floor would still clip the low tail
-            //    (and with an adopted fitR near +20% it rejected essentially every resting frame,
-            //    which bricks the tracker for the whole session). 0.65 clears the 26px junk while
-            //    leaving the real resting band untouched.
+            // The factor is 0.80 (matching the pixel floor) and there is no upper bound:
+            //  * 0.80 is only safe because the adopted fitted radius is clamped to +-5% in
+            //    Calibrate. BaseR then stays in 41.3..45.7, so 0.80*BaseR is 33.0..36.6 - always
+            //    below the measured resting band of 38.1..50.9. Under the old +-20% rule a fit of
+            //    47..52 was adopted, giving a floor of 37.6..41.6 that crosses the resting minimum
+            //    and blinds the tracker. If the clamp is ever loosened, this factor must come back
+            //    down with it.
             //  * The upper bound was provably DEAD CODE: HookPixels already rejects pixels beyond
             //    1.60*BaseR while not deployed, and a disk is convex, so the centroid can never
-            //    exceed it. Dead guards only give false confidence.
+            //    exceed it. (0.80 * 2.0 = 1.60 is exactly the pixel ceiling, which is the real
+            //    reason the deploy latch cannot be reached by swing noise.) Dead guards only give
+            //    false confidence.
             if (BaseR > 6 && len < BaseR * 0.80)
             {
                 Reject = Why(string.Format(CultureInfo.InvariantCulture, "centroid r={0:F1} < {1:F1} (0.80*BaseR)", len, BaseR * 0.80));
@@ -141,6 +144,7 @@ namespace HookAlerter
                 }
                 JumpRejects = 0;
             }
+            else JumpRejects = 0;
 
             // Same idea for the radius: at rest the hook sits just under the pivot, and while
             // deployed it is far out. A tiny radius means we latched onto something at the winch.

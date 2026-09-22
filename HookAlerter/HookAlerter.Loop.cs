@@ -78,14 +78,29 @@ namespace HookAlerter
             bool sizeMatches = cfg.ClientW == cap.ClientScreenRect.Width && cfg.ClientH == cap.ClientScreenRect.Height;
             if (cfg.PivotX > 0 && cfg.PivotY > 0 && cfg.Radius > 0 && (cfg.ManualGeometry || sizeMatches))
             {
-                v.PivotX = cfg.PivotX; v.PivotY = cfg.PivotY; v.BaseR = cfg.Radius;
+                v.PivotX = cfg.PivotX; v.PivotY = cfg.PivotY;
+                // Clamp the saved radius. Config.Save persists whatever radius was adopted, and an
+                // older build persisted fits of 47..52 (the +-20% rule, |52-43.5| <= 8.7). The
+                // centroid floor is 0.80*BaseR, so such a radius gives a floor of 37.6..41.6 that
+                // crosses the measured resting minimum of 38.1 and blinds the tracker - and this
+                // path never calls Calibrate, so the new +-5% window cannot help. Derive the legal
+                // band from the field height instead of trusting the file.
+                double legal = v.Field.Height > 0 ? v.Field.Height * 0.052 : 0;
+                if (legal > 0 && (cfg.Radius < legal * 0.95 || cfg.Radius > legal * 1.05))
+                {
+                    Console.WriteLine("[cfg] saved radius " + cfg.Radius + " is outside the legal band of " + legal.ToString("F1") + " - ignoring it, will recalibrate");
+                    goto skipSavedPivot;
+                }
+                v.BaseR = cfg.Radius;
                 v.RestR = cfg.Radius;
+                v.PivotSource = "INI";
                 if (cfg.FieldL >= 0 && cfg.FieldR > cfg.FieldL)
                     v.Field = new Rectangle(cfg.FieldL, cfg.FieldT, cfg.FieldR - cfg.FieldL, cfg.FieldB - cfg.FieldT);
                 v.HaveAngle = false;
                 calibrated = true;
-                Console.WriteLine("[cfg] reusing saved pivot (" + cfg.PivotX + "," + cfg.PivotY + ") r=" + cfg.Radius);
+                Console.WriteLine("[cfg] reusing saved pivot (" + cfg.PivotX + "," + cfg.PivotY + ") r=" + cfg.Radius + " src=INI");
             }
+        skipSavedPivot:
 
             while (running)
             {
@@ -119,7 +134,8 @@ namespace HookAlerter
                     if (again != IntPtr.Zero && again != cap.Hwnd)
                     {
                         cap.Retarget(again);
-                        Console.WriteLine("[win] re-targeted the game window -> " + again);
+                        v.JumpRejects = 0; v.PivotSource = "?";
+                            Console.WriteLine("[win] re-targeted the game window -> " + again);
                         calibrated = false;
                         v.HaveAngle = false;
                         v.Field = Rectangle.Empty;
@@ -142,7 +158,7 @@ namespace HookAlerter
 
                 // requests raised by the control panel (UI thread) or by hotkeys
                 if (CtrlPanel.ReqToggle) { CtrlPanel.ReqToggle = false; swOn = !swOn; Console.WriteLine(swOn ? "提示开关: 开启" : "提示开关: 已暂停"); }
-                if (CtrlPanel.ReqRecal) { CtrlPanel.ReqRecal = false; calibrated = false; v.HaveAngle = false; v.MinAngle = -1.6; v.MaxAngle = 1.6; Console.WriteLine("[recalibrate]"); }
+                if (CtrlPanel.ReqRecal) { CtrlPanel.ReqRecal = false; calibrated = false; v.JumpRejects = 0; v.PivotSource = "?"; v.HaveAngle = false; v.MinAngle = -1.6; v.MaxAngle = 1.6; Console.WriteLine("[recalibrate]"); }
                 if (CtrlPanel.ReqStatus)
                 {
                     CtrlPanel.ReqStatus = false;
@@ -203,7 +219,7 @@ namespace HookAlerter
                     swOn = !swOn;
                 Console.WriteLine(swOn ? "提示开关: 开启" : "提示开关: 已暂停");
                 }
-                if (f8 && !prevF8) { calibrated = false; v.HaveAngle = false; v.MinAngle = -1.6; v.MaxAngle = 1.6; Console.WriteLine("[recalibrate]"); }
+                if (f8 && !prevF8) { calibrated = false; v.JumpRejects = 0; v.PivotSource = "?"; v.HaveAngle = false; v.MinAngle = -1.6; v.MaxAngle = 1.6; Console.WriteLine("[recalibrate]"); }
                 if (f10 && !prevF10) { cfg.LeadMs = Math.Max(0, cfg.LeadMs - 10); cfg.Save(cfgPath); Console.WriteLine("lead=" + cfg.LeadMs + "ms"); }
                 if (f11 && !prevF11) { cfg.LeadMs = cfg.LeadMs + 10; cfg.Save(cfgPath); Console.WriteLine("lead=" + cfg.LeadMs + "ms"); }
                 prevF6 = f6; prevF7 = f7; prevF8 = f8; prevF10 = f10; prevF11 = f11;
@@ -216,7 +232,8 @@ namespace HookAlerter
                     if (again != IntPtr.Zero && again != cap.Hwnd)
                     {
                         cap.Retarget(again);
-                        Console.WriteLine("[win] re-targeted the game window -> " + again);
+                        v.JumpRejects = 0; v.PivotSource = "?";
+                            Console.WriteLine("[win] re-targeted the game window -> " + again);
                         calibrated = false;
                         v.HaveAngle = false;
                         v.Field = Rectangle.Empty;
