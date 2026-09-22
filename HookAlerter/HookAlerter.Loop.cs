@@ -737,6 +737,7 @@ namespace HookAlerter
                                 v.LastAcc, v.LastBest, v.LastRocks,
                                 v.DescribeCandidates(cap.ClientScreenRect.Width > 0 ? cap.ClientScreenRect.Width : 1930),
                                 v.DescribeRocks()));
+                            Console.WriteLine(v.DescribeShape(cap.ClientScreenRect.Width > 0 ? cap.ClientScreenRect.Width : 1930));
                         }
                         else if ((DateTime.Now - lastTraceLog).TotalSeconds > 1.0 && haveTarget)
                         {

@@ -776,6 +776,55 @@ namespace HookAlerter
 
         /// <summary>Summarise the candidate pixels as blobs with their radius and angle from the
         /// pivot, so the run loop can log what the tracker had to choose from.</summary>
+        /// <summary>ASCII map of the largest moving-grey blob, for shape diagnosis. Pure
+        /// diagnostic: nothing in the tracker reads it. The tracked arc is correct in the middle
+        /// (+-43 degrees, radius 40) but stops about 18px short at both ends while the real swing is
+        /// +-66, and no threshold explains that - so the shape at the extremes has to be looked at
+        /// rather than inferred. '#' = candidate pixel, '.' = empty, '@' = the pivot.
+        /// Rendered at most 62 wide, with the pivot marked so the direction is readable.</summary>
+        public string DescribeShape(int w)
+        {
+            if (CandidateMask.Count == 0) return "none";
+            int minx = int.MaxValue, maxx = 0, miny = int.MaxValue, maxy = 0;
+            for (int i = 0; i < CandidateMask.Count; i++)
+            {
+                int px = CandidateMask[i] % w, py = CandidateMask[i] / w;
+                if (px < minx) minx = px; if (px > maxx) maxx = px;
+                if (py < miny) miny = py; if (py > maxy) maxy = py;
+            }
+            // Include the pivot so the arc direction is visible.
+            if (PivotX > 0) { if (PivotX < minx) minx = (int)PivotX; if (PivotX > maxx) maxx = (int)PivotX; }
+            if (PivotY > 0) { if (PivotY < miny) miny = (int)PivotY; if (PivotY > maxy) maxy = (int)PivotY; }
+            int bw = maxx - minx + 1, bh = maxy - miny + 1;
+            if (bw <= 0 || bh <= 0 || (long)bw * bh > 4000000) return "too spread";
+            bool[] mask = new bool[bw * bh];
+            for (int i = 0; i < CandidateMask.Count; i++)
+            {
+                int px = CandidateMask[i] % w, py = CandidateMask[i] / w;
+                int mx = px - minx, my = py - miny;
+                if (mx >= 0 && my >= 0 && mx < bw && my < bh) mask[my * bw + mx] = true;
+            }
+            int step = 1;
+            while (bw / step > 60 || bh / step > 26) step++;
+            StringBuilder sb = new StringBuilder();
+            sb.Append("[shape] box=(" + minx + "," + miny + ")-(" + maxx + "," + maxy + ") step=" + step + "  ");
+            for (int y = 0; y < bh; y += step)
+            {
+                sb.Append("| ");
+                for (int x = 0; x < bw; x += step)
+                {
+                    bool any = false;
+                    for (int yy = y; yy < y + step && yy < bh && !any; yy++)
+                        for (int xx = x; xx < x + step && xx < bw; xx++)
+                            if (mask[yy * bw + xx]) { any = true; break; }
+                    if (PivotX > 0 && Math.Abs(minx + x - PivotX) < step && Math.Abs(miny + y - PivotY) < step) sb.Append('@');
+                    else sb.Append(any ? '#' : '.');
+                }
+                sb.Append(' ');
+            }
+            return sb.ToString();
+        }
+
         public string DescribeCandidates(int w)
         {
             if (CandidateMask.Count == 0) return "none";
