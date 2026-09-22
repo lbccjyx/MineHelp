@@ -1,15 +1,17 @@
 ---
 name: hookalerter-dev
-description: Maintain the HookAlerter Gold Miner aiming tool (C# single-file WinForms + Win32 P/Invoke). Use when changing HookAlerter.cs, debugging its hook tracking / aim accuracy, adding panel controls, or reasoning about the game's discrete-frame timing.
-whenToUse: Any edit, bug hunt, or accuracy investigation in HookAlerter/HookAlerter.cs.
+description: Maintain the HookAlerter Gold Miner aiming tool (C# WinForms + Win32 P/Invoke, split into 10 partial-class shards). Use when changing its source, debugging hook tracking / aim accuracy, adding panel controls, or reasoning about the game's discrete-frame timing.
+whenToUse: Any edit, bug hunt, or accuracy investigation under HookAlerter/.
 ---
 
 # HookAlerter 开发手册
 
-单文件 C#（.NET Framework 4.x，C# 5 语法），WinForms + Win32 P/Invoke。
+C#（.NET Framework 4.x，**C# 5 语法**），WinForms + Win32 P/Invoke，
+源码拆成 **10 个 partial-class 分片**（见 §2）。
 一个外部工具：**只读屏幕像素**，不注入进程、不读游戏内存、不改游戏文件。
 
-工作目录：项目根。源码 `HookAlerter/HookAlerter.cs`，产物 `HookAlerter/HookAlerter.exe`。
+工作目录：项目根。源码 `HookAlerter/HookAlerter.*.cs`，产物 `HookAlerter/HookAlerter.exe`。
+**仓库**：`git@github.com:lbccjyx/MineHelp.git`，分支 `main`。
 
 ---
 
@@ -25,6 +27,7 @@ whenToUse: Any edit, bug hunt, or accuracy investigation in HookAlerter/HookAler
 6. **避免未使用的局部变量和字段**。实测下面两种都曾直接导致构建失败：
    `CS0649`（字段从未赋值）、`CS0219`（变量已赋值但未使用）。
    不必纠结具体是哪个警告码 —— 不写用不到的东西即可。
+7. **改动前先提交。** 见 §15 —— 复核看的是 **git diff**，不是全量源码。
 
 ---
 
@@ -427,12 +430,16 @@ Get-ChildItem .\HookAlerter\HookAlerter.cs, .\HookAlerter\HookAlerter.exe,
 >
 > **落地顺序必须是：**
 > ```
-> ① 改动方出方案（不碰文件）
-> ② 查 bug 方独立复核 ← 必须在构建之前
-> ③ 双方一致 → 才允许写文件、构建、交付
+> ① 改动方改完 → git commit
+> ② 查 bug 方独立复核 ← 必须在构建/交付之前，输入是 git diff（§15）
+> ③ 双方一致 → 才允许构建、交付
 > ```
 > **禁止**"先改完再说"、"我自己看过了"、"问题很明显不用审"。
 > 改动方对自己写的保护机制**天然盲**（这是本项目的实证结论，不是谦虚）。
+>
+> **复核的输入是 diff，不是全量源码** —— 见 §14 和 §15。
+> 一次典型改动 diff 只有 30~80 行（1~3 千 token），
+> 而全量源码是 5 万 token。**先提交，diff 才存在。**
 
 ### 四类角色
 
@@ -464,12 +471,15 @@ Get-ChildItem .\HookAlerter\HookAlerter.cs, .\HookAlerter\HookAlerter.exe,
 
 ### 13.2 查 bug 方的纪律
 
+0. **输入是 `git diff`，不是全量源码。** 先 `git diff --stat` 看规模，再逐块看。
+   只有需要判断"这段新代码和周围旧逻辑的关系"时，才去读被改函数所在的**单个分片**（不是全量）。
 1. **先做版本一致性校验**（§11.7）—— 用旧日志分析会得出**反向结论**（已经发生过两次）。
 2. **优先用日志数字说话**，不要靠推理；本项目几乎每个真凶都不是最初怀疑的那个。
 3. **日志答不了就标 `UNKNOWN`**，并说明"需要哪个字段"。**不许猜。**
 4. **被证伪也要说** —— 明确写出"这条不是问题"，避免改动方白改。
 5. **改动方给出的辩解说辞不算证据。** 对照方曾经给出"日志打的是质心、门限管的是像素"的辩解，
    **结论对、理由错** —— 那恰恰就是矛盾所在。**只认数字。**
+
 
 ### 13.3 改动纪律
 
@@ -485,6 +495,23 @@ Get-ChildItem .\HookAlerter\HookAlerter.cs, .\HookAlerter\HookAlerter.exe,
 ---
 
 ## 14. Token 纪律（实测数据）
+
+单个 `session23.log` 就有 **1.12 MB ≈ 32 万 token**，是全部源码的 **6 倍**。
+源码本身 177 KB ≈ 5.0 万 token。所以**最大的浪费不是读代码，是读日志和读全量**。
+
+### 规则
+
+1. **永远不要整读日志。** 先 `Select-String '[cal]|[fire]|[flight]|[miss]|\[trace\]'`，
+   再按需取上下文。`[trace]` 一次 dump 就是几十行。
+2. **永远不要整读源码。** 先按 §2 的分片表定位到**一个**分片；
+   查瞄准只读 `Vision.Aim` + `Loop`。
+3. **复核只看 diff**（§15.1）—— 30~80 行 vs 5 万 token，**省 20~50 倍**。
+   为此**每次改动前必须先 `git commit`**。
+4. **统计优于逐行。** 把 `[trace]` 的布尔字段（`dep/setl/worth/near/inObj`）按占比统计，
+   比逐行看有效得多 —— 58 帧里 `dep=1` 占 23 就是"异常"的强信号。
+5. **不要为了让日志更详细而全量打印。** `[miss]` 诊断已做 1 秒限频；
+   新增日志字段也要限频，否则日志会变成最大的 token 消耗源。
+
 
 **日志才是 token 大头，不是源码。** 实测：
 
@@ -506,17 +533,78 @@ Get-ChildItem .\HookAlerter\HookAlerter.cs, .\HookAlerter\HookAlerter.exe,
    一局几十钩就是几十万 token。
 3. 优先读 `FIXES.md`（几 KB）了解历史，再去读日志 —— 很多现象之前已经查清并记录了。
 
-### 关于拆分源码（已评估，结论：不做）
+### 源码已拆分（10 分片，2026-09-23 完成）
 
-`Add-Type -Path` **确实接受文件数组**，已用阴性对照 + 真实源码干跑 + IL 逐方法比对验证，
-拆分**可行且产物完全可复现**（无需 build.ps1），且**无任何阻塞**。
+| 分片 | KB | 内容 |
+|---|---|---|
+| `HookAlerter.Native.cs` | 5.7 | `Nat` |
+| `HookAlerter.Config.cs` | 5.9 | `Cfg` |
+| `HookAlerter.Frame.cs` | 4.7 | `Frame` + `Cls` |
+| `HookAlerter.Capture.cs` | 5.8 | `ICapture` / `WindowCapture` / `Overlay` |
+| `HookAlerter.Panel.cs` | 13.3 | `CtrlPanel` |
+| `HookAlerter.Vision.Geometry.cs` | 50 | `Vision` 几何/分割/标定 |
+| `HookAlerter.Vision.Aim.cs` | 28 | `Vision` 跟踪/射线/瞄准 |
+| `HookAlerter.App.cs` | 9.3 | `Program` 入口 |
+| `HookAlerter.Loop.cs` | 47 | `Program.RunLoop` |
+| `HookAlerter.Tests.cs` | 27 | `Program` 测试模式 |
 
-**但不值得做**：`Vision`(39%) + `Program`(42%) = **81%** 的代码量，
-而判定逻辑**横跨这两个文件**，所以拆完读一次只从 **5.0 万 → 4.1 万 token（省 19%）**。
-只有"只改小类型"的任务才省 81%，而那些恰恰是最少改的部分。
+按任务**只读需要的分片**：查瞄准只读 `Vision.Aim` + `Loop`（75 KB），
+而不是全量 177 KB —— **省 58%**。
 
-**若要真正降 token，应该重构而非机械拆：**
-- 先把 `Program` 里 5 个测试模式（约 300 行 ≈ 4400 token）抽出去 —— 纯搬运、零逻辑改动
-- `Vision` 可按 几何/转轴（约 299 行）vs 跟踪+分割+瞄准（约 998 行）拆分
-- 任何拆分都必须同步更新 §1 的构建命令（改为 `Add-Type -Path @(各分片)`）、
-  §0-§2 的"单文件"表述、以及 §13 里的规模数字
+### ⭐ 最重要的省 token 手段：**看 diff，不看源码**
+
+复核一次改动**不需要全量源码**，只需要 diff：
+
+```powershell
+git diff HEAD~1..HEAD                      # 上一次提交到现在
+git diff <reviewed-sha>..HEAD              # 上次复核通过之后的全部改动
+git diff --stat                           # 先看规模
+```
+
+| | 规模 | 约 token |
+|---|---|---|
+| 全量源码（10 分片） | 177 KB | ~5.0 万 |
+| 一次典型改动的 diff | 30~80 行 | **1~3 千** |
+
+**省 20~50 倍。** 所以**每次改动前先提交**，复核方只看 diff（§15）。
+
+---
+
+## 15. Git 工作流（配合复核用）
+
+**仓库**：`git@github.com:lbccjyx/MineHelp.git`，分支 `main`。
+
+### 15.1 铁律：**先提交，再复核，再交付**
+
+```
+① 改代码        → git commit（本地即可，信息写清"改了什么、为什么"）
+② 送复核        → 给它 `git diff <上次通过>..HEAD`，不是全量源码
+③ 复核通过      → git commit --amend 或追加一个提交，然后 push
+④ 复核不通过    → 按意见改，重复 ①②
+```
+
+**为什么必须先提交**：diff 是复核方唯一的输入。
+没有提交点，就只能全量检查 —— 那正是 token 爆炸的来源。
+
+### 15.2 只提交工具代码 —— **工作区是游戏安装目录**
+
+`D:\software\Steam\steamapps\common\Gold MinerClassic Edition` **就是 Steam 游戏目录**。
+`.gitignore` 已排除 `GOLD.exe` / `Engine/` / `GoldMiner/` / `*.dll` / `*.bat` / 日志 / 参考截图。
+**提交前务必 `git diff --cached --name-only` 核对**，绝不要把游戏本体推上去。
+
+### 15.3 这个环境下的两个坑
+
+1. **沙箱默认拒绝执行 `git.exe`**（`Access is denied`）。
+   本地 git 命令（`git status` 等）能跑，但 `init`/`add`/`commit`/`push`/`ls-remote` 需要提权。
+   PowerShell 里**不要用管道捕获 git 输出**（嵌套管道 stdio 会失败），必要时重定向到文件再读。
+2. **仓库属主警告**（`dubious ownership`）：目录属主是 `BUILTIN\Administrators`，
+   而当前用户是 `Administrator`。正常终端首次使用需执行一次：
+   ```
+   git config --global --add safe.directory "D:/software/Steam/steamapps/common/Gold MinerClassic Edition"
+   ```
+
+### 15.4 提交信息写什么
+
+一句话说明**改了什么**，正文写**为什么**（尤其是被日志证明的因果）。
+复核方只有 diff 和提交信息 —— **信息越完整，它需要的额外上下文越少**。
+
