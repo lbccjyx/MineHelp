@@ -44,3 +44,6 @@ HookAlerter/_dev/*.diff
 
 # F9 diagnostic frames: 360KB each, regenerate with F9.
 HookAlerter/debug_*.png
+
+# Archived run logs: live evidence kept out of git (each 100KB-1MB).
+HookAlerter/_dev/archive/
