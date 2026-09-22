@@ -51,7 +51,7 @@ namespace HookAlerter
                 //     never learned - which is exactly why the first shot at a new target is always
                 //     off and the second one lands.
                 // Require the radius to have been genuinely large before believing a shot happened.
-                if (NoHookFrames > 6 && RestR > 6 && HookR > RestR * 1.6) HookDeployed = true;
+                if (NoHookFrames > 6 && BaseR > 6 && HookR > BaseR * 1.45) HookDeployed = true;
                 if (NoHookFrames > 45) { HaveAngle = false; LostFrames = 45; }
                 // RECOVERY. Nothing used to pull the tracker out of this state, so a single bad
                 // stretch could blind it permanently: HookBox() is centred on the last predicted
@@ -204,19 +204,21 @@ namespace HookAlerter
             }
             if (RestR > 0)
             {
-                // 2.0, not 1.45. The old threshold sat at RestR*1.45 = 59.5px while the swinging
-                // radius measures 40-46px, so a few stray rope pixels in the centroid were enough to
-                // latch "the hook is out" - and `ready` requires !HookDeployed, so every shot taken
-                // during that window was suppressed. A live round showed dep=1 on 23 of 58 tracked
-                // frames, the hook reaching the aim 9 times and the fire window 3 times, yet only
-                // ONE shot: the guard was eating them. A genuine shot sends the hook hundreds of
-                // pixels out, so 2x the resting radius still cannot be reached by swing noise.
-                if (len > RestR * 2.0)
+                // BaseR*1.45 (63px), NOT RestR*2.0 (81px). The 2.0 threshold was DEAD: while not
+                // deployed HookPixels caps every pixel at BaseR*1.60 (69.6px), and a disk is convex,
+                // so the centroid can never exceed 69.6 - and 81 > 69.6 means the latch could never
+                // be set at all. With no latch the arc upper bound never lifts, so the tracker is
+                // pinned inside 70px and can NEVER follow the hook out on a shot: measured over a
+                // live round, dep=1 frames had a median radius of 38.3px and flight was recorded 0
+                // times in 8 shots, which is why `lead` never learns and the first shot at a new
+                // target is always short. 63px is reachable (< 69.6) and still above the measured
+                // resting maximum (52.2), so swing noise cannot trip it.
+                if (len > BaseR * 1.45)
                 {
                     HookDeployed = true; RestFrames = 0;
                     if (len > DeployPeak) DeployPeak = len;      // how far out it actually got
                 }
-                else if (len < RestR * 1.5)
+                else if (len < BaseR * 1.30)
                 {
                     if (++RestFrames >= 6)
                     {
