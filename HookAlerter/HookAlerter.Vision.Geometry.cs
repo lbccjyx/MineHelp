@@ -1123,16 +1123,19 @@ namespace HookAlerter
                     bool[] used = new bool[bw * bh];
                     int[] stack = new int[bw * bh];
                     int bestCount = 0; double bx = 0, by = 0;
+                    List<int> bestPts = new List<int>();
                     for (int i = 0; i < mask.Length; i++)
                     {
                         if (!mask[i] || used[i]) continue;
                         int sp = 0; stack[sp++] = i; used[i] = true;
                         int cnt2 = 0; double sx2 = 0, sy2 = 0;
+                        List<int> curBlob = new List<int>();
                         while (sp > 0)
                         {
                             int q = stack[--sp];
                             int qx = q % bw, qy = q / bw;
                             cnt2++; sx2 += qx + x0; sy2 += qy + y0;
+                            curBlob.Add((qy + y0) * cur.W + (qx + x0));
                             for (int dy = -2; dy <= 2; dy++)
                             {
                                 int ny = qy + dy;
@@ -1146,13 +1149,39 @@ namespace HookAlerter
                                 }
                             }
                         }
-                        if (cnt2 > bestCount) { bestCount = cnt2; bx = sx2; by = sy2; }
+                        if (cnt2 > bestCount) { bestCount = cnt2; bx = sx2; by = sy2; bestPts = curBlob; }
                     }
                     LastBest = bestCount;
                     if (bestCount >= 12)
                     {
                         count = bestCount;
-                        hx = bx / bestCount; hy = by / bestCount;
+                        // Direction from the OUTERMOST pixels, not from the blob centroid.
+                        // The blob is rope + hook, and the rope pixels near the pivot carry no
+                        // usable direction - they sit almost on the pivot, and averaging them drags
+                        // the centroid both inward (measured r=32 against BaseR=43.5) and toward
+                        // vertical. That compresses the reported angle, which is exactly what the
+                        // user described: -38 at rest, but -67 the instant the hook is out, because
+                        // then the near-pivot pixels are a negligible fraction of the blob. The hook
+                        // is at the END of the rope, so the outer pixels are the ones that point at
+                        // the target.
+                        double maxR = 0;
+                        for (int k = 0; k < bestPts.Count; k++)
+                        {
+                            double px2 = bestPts[k] % cur.W - PivotX, py2 = bestPts[k] / cur.W - PivotY;
+                            double rr2 = Math.Sqrt(px2 * px2 + py2 * py2);
+                            if (rr2 > maxR) maxR = rr2;
+                        }
+                        double cut = maxR * 0.70;
+                        double ox = 0, oy = 0; int on = 0;
+                        for (int k = 0; k < bestPts.Count; k++)
+                        {
+                            int px2 = bestPts[k] % cur.W, py2 = bestPts[k] / cur.W;
+                            double dx2 = px2 - PivotX, dy2 = py2 - PivotY;
+                            if (Math.Sqrt(dx2 * dx2 + dy2 * dy2) < cut) continue;
+                            ox += px2; oy += py2; on++;
+                        }
+                        if (on >= 6) { hx = ox / on; hy = oy / on; }
+                        else { hx = bx / bestCount; hy = by / bestCount; }
                         return true;
                     }
                 }
