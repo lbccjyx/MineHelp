@@ -819,6 +819,12 @@ namespace HookAlerter
         /// point in the loop, so it returned immediately while the caller printed a success message
         /// - a log that claims work it did not do is worse than no log at all. Returns whether it
         /// actually produced a geometry.</summary>
+        /// <summary>Where the current pivot came from: ART (measured on a sane level field),
+        /// CLIENT (fallback from the client size), or PREV (kept from an earlier run). Logged on
+        /// every calibration attempt - without it the pivot is untraceable, and a wrong pivot is
+        /// the single most damaging failure this tool has (31px was worth 23 degrees of angle).</summary>
+        public string PivotSource = "?";
+
         public bool ArtPivotFromClient(Frame f)
         {
             if (f == null || f.W < 64 || f.H < 64) return false;

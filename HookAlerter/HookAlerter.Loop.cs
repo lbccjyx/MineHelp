@@ -260,7 +260,7 @@ namespace HookAlerter
                         // seconds, so gating on it strands the tool on a real level.
                         if (v.FieldGeometrySaneNow())
                         {
-                            v.ArtPivot();
+                            v.ArtPivot(); v.PivotSource = "ART";
                             v.RestR = v.BaseR;
                             Console.WriteLine("[cal] skipped (" + v.CalibMessage + ") - measured pivot");
                         }
@@ -274,16 +274,19 @@ namespace HookAlerter
                             // version of this fallback silently did nothing.
                             if (v.ArtPivotFromClient(cap.Grab()))
                             {
+                                v.PivotSource = "CLIENT";
                                 v.RestR = v.BaseR;
                                 Console.WriteLine("[cal] skipped (" + v.CalibMessage + ") - fallback pivot from client size");
                             }
                             else
                             {
+                                v.PivotSource = "NONE";
                                 Console.WriteLine("[cal] skipped (" + v.CalibMessage + ") - FAILED to establish any geometry");
                             }
                         }
                         else
                         {
+                            v.PivotSource = "PREV";
                             Console.WriteLine("[cal] skipped (" + v.CalibMessage + ") - keeping the previous pivot");
                         }
                         v.HookDeployed = false;
@@ -636,14 +639,14 @@ namespace HookAlerter
                     // One line per frame: everything the decision looked at.
                     {
                         string rec = string.Format(CultureInfo.InvariantCulture,
-                            "[trace] ang={0,7:F2} aim={1,7:F2} d={2,6:F2} half={3,5:F2} obj={4,6:F1}..{5,6:F1} inObj={6} near={7} crossed={8} tOn={9,4:F0}ms step={10,5:F2} dep={11} setl={12} worth={13} hx={14:F0} hy={15:F0} piv={16:F0},{17:F0} hitR={18:F0}{19}",
+                            "[trace] ang={0,7:F2} aim={1,7:F2} d={2,6:F2} half={3,5:F2} obj={4,6:F1}..{5,6:F1} inObj={6} near={7} crossed={8} tOn={9,4:F0}ms step={10,5:F2} dep={11} setl={12} worth={13} hx={14:F0} hy={15:F0} piv={16:F0},{17:F0} hitR={18:F0} dpk={19:F0}{20}",
                             v.Angle * 180 / Math.PI, aim * 180 / Math.PI, (v.Angle - aim) * 180 / Math.PI,
                             half * 180 / Math.PI, a0 * 180 / Math.PI, a1 * 180 / Math.PI,
                             (v.Angle >= a0 && v.Angle <= a1) ? 1 : 0,
                             nearLine ? 1 : 0, crossed ? 1 : 0,
                             tOnSample * 1000, gameStep * 180 / Math.PI,
                             v.HookDeployed ? 1 : 0, settling ? 1 : 0, worth ? 1 : 0,
-                            v.HookX, v.HookY, v.PivotX, v.PivotY, v.PredHitR,
+                            v.HookX, v.HookY, v.PivotX, v.PivotY, v.PredHitR, v.DeployPeak,
                             firedNow ? "   *** FIRE ***" : "");
 
                         if (firedNow)
@@ -703,9 +706,9 @@ namespace HookAlerter
                     {
                         lastRejectLog = DateTime.Now;
                         Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                            "[miss] {0}  |  BaseR={1:F1} RestR={2:F1} dep={3} haveAngle={4} noHook={5} gone={6:F1}s",
+                            "[miss] {0}  |  BaseR={1:F1} RestR={2:F1} gone={3:F1}s piv={4:F0},{5:F0} src={6} dpk={7:F0}",
                             v.Reject.Length == 0 ? "(no reason recorded)" : v.Reject,
-                            v.BaseR, v.RestR, v.HookDeployed ? 1 : 0, v.HaveAngle ? 1 : 0, v.NoHookFrames, gone));
+                            v.BaseR, v.RestR, gone, v.PivotX, v.PivotY, v.PivotSource, v.DeployPeak));
                     }
                 }
                 }   // end if (!skipTrack)

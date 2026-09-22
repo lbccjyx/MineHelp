@@ -37,7 +37,7 @@ namespace HookAlerter
             Reject = "";
             if (!HookPixels(f, Prev, HookBox(), out hx, out hy, out cnt))
             {
-                Reject = string.Format(CultureInfo.InvariantCulture, "no pixels (n={0}) box={1}", cnt, HookBox());
+                Reject = Why(string.Format(CultureInfo.InvariantCulture, "no pixels (n={0}) box={1}", cnt, HookBox()));
                 NoHookFrames++;
                 if (NoHookFrames > 6) HookDeployed = true;
                 if (NoHookFrames > 45) { HaveAngle = false; LostFrames = 45; }
@@ -60,7 +60,7 @@ namespace HookAlerter
                     // real angle before anything can fire.
                     HookDeployed = false;
                     NoHookFrames = 0;
-                    Reject = "blind for 3s - re-seeded the search box at rest";
+                    Reject = Why("blind for 3s - re-seeded the search box at rest");
                 }
                 return HaveAngle;
             }
@@ -87,9 +87,9 @@ namespace HookAlerter
             //  * The upper bound was provably DEAD CODE: HookPixels already rejects pixels beyond
             //    1.60*BaseR while not deployed, and a disk is convex, so the centroid can never
             //    exceed it. Dead guards only give false confidence.
-            if (BaseR > 6 && len < BaseR * 0.65)
+            if (BaseR > 6 && len < BaseR * 0.80)
             {
-                Reject = string.Format(CultureInfo.InvariantCulture, "centroid r={0:F1} < {1:F1} (0.65*BaseR)", len, BaseR * 0.65);
+                Reject = Why(string.Format(CultureInfo.InvariantCulture, "centroid r={0:F1} < {1:F1} (0.80*BaseR)", len, BaseR * 0.80));
                 LostFrames++; return false;
             }
 
@@ -101,7 +101,7 @@ namespace HookAlerter
             // the bad frame cannot corrupt Omega or the crossing test either.
             if (Math.Abs(ang) > 1.50)
             {
-                Reject = string.Format(CultureInfo.InvariantCulture, "angle {0:F1}deg out of range", ang * 180 / Math.PI);
+                Reject = Why(string.Format(CultureInfo.InvariantCulture, "angle {0:F1}deg out of range", ang * 180 / Math.PI));
                 LostFrames++;
                 return false;
             }
@@ -122,12 +122,21 @@ namespace HookAlerter
                 double jump = ang - Angle;
                 while (jump > Math.PI) jump -= 2 * Math.PI;
                 while (jump < -Math.PI) jump += 2 * Math.PI;
-                if (Math.Abs(jump) > 0.38 && LostFrames < 3)
+                // The grace clause now uses JumpRejects, a counter that actually accumulates.
+                // `LostFrames` could not serve: it is zeroed at the top of this function on EVERY
+                // successful HookPixels, and every rejecting gate returns immediately, so at this
+                // line it was always 0 and `LostFrames < 3` was permanently true - the grace period
+                // did not exist, and a 106-degree jump was a hard reject forever. JumpRejects is
+                // incremented only here and cleared only on an accepted frame, so three consecutive
+                // over-limit frames really do re-acquire.
+                if (Math.Abs(jump) > 0.38 && JumpRejects < 3)
                 {
-                    Reject = string.Format(CultureInfo.InvariantCulture, "jump {0:F1}deg", jump * 180 / Math.PI);
-                    LostFrames++;
+                    JumpRejects++;
+                    Reject = Why(string.Format(CultureInfo.InvariantCulture,
+                        "jump {0:F1}deg (reject {1}/3)", jump * 180 / Math.PI, JumpRejects));
                     return false;
                 }
+                JumpRejects = 0;
             }
 
             // Same idea for the radius: at rest the hook sits just under the pivot, and while
@@ -197,7 +206,7 @@ namespace HookAlerter
                         // the cycle that kept being reported as "[stuck] storm" was only the visible
                         // symptom of it. A genuine shot takes the hook hundreds of pixels out first,
                         // so require that before treating the return as the end of a shot.
-                        if (HookDeployed && DeployPeak > RestR * 2.5) LastReturn = DateTime.Now;
+                        if (HookDeployed) LastReturn = DateTime.Now;
                         HookDeployed = false;
                         DeployPeak = 0;
                     }
@@ -210,6 +219,22 @@ namespace HookAlerter
         /// <summary>Peak tracked radius during the current deployment; distinguishes a real shot from
         /// a one-frame latch cycle.</summary>
         public double DeployPeak;
+
+        /// <summary>Consecutive over-limit angle jumps. Unlike LostFrames (zeroed on every
+        /// successful HookPixels) this one accumulates, so the three-strike re-acquisition clause
+        /// in the continuity gate is real rather than dead.</summary>
+        public int JumpRejects;
+
+        /// <summary>Format a rejection reason together with the tracker state AT THE MOMENT of the
+        /// rejection. The run loop used to print v.HookDeployed/v.HaveAngle alongside the reason,
+        /// but those are read after TrackHook has already returned and mutated them (NoHookFrames++
+        /// sets HookDeployed on the same path), so the logged state could be several frames stale.
+        /// Capturing it here makes the [miss] line trustworthy.</summary>
+        string Why(string msg)
+        {
+            return string.Format(CultureInfo.InvariantCulture, "{0} [dep={1} have={2} noHook={3}]",
+                msg, HookDeployed ? 1 : 0, HaveAngle ? 1 : 0, NoHookFrames);
+        }
 
         public int RestFrames;
         public DateTime LastReturn = DateTime.MinValue;
