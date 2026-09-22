@@ -52,6 +52,7 @@ namespace HookAlerter
             double stallAngle = 999; DateTime stallAt = DateTime.Now;
             DateTime lastRejectLog = DateTime.MinValue;
             DateTime lastTraceLog = DateTime.MinValue;
+            DateTime lastCalTry = DateTime.MinValue;
             DateTime lastJumpAt = DateTime.Now, sampleAt = DateTime.Now;
             DateTime lastReturnSeen = DateTime.MinValue;
 
@@ -248,6 +249,22 @@ namespace HookAlerter
                 }
 
                 bool skipTrack = false;
+                // A fallback pivot is a STOPGAP, not a result. It gives usable geometry but it never
+                // runs LearnObjects, so StaticRocks stays empty - and without that exclusion list
+                // HookPixels happily locks onto a static grey blob near the pivot (the winch, the
+                // miner). A live log proved it: 524 trace frames with ang pinned at -54.03 and
+                // hx,hy pinned at (935,140), 37px from the pivot, while the real hook swung. A frozen
+                // angle can never cross the pointer line, so the tool waits forever and the user
+                // hooks by hand. "calibrated = true regardless of failure" made that permanent,
+                // because the only retry was gone. So: if the geometry did not come from a real
+                // calibration, keep trying until it does.
+                if (calibrated && v.PivotSource != "ART" && v.PivotSource != "ART+FITr"
+                    && (DateTime.Now - lastCalTry).TotalSeconds > 5.0)
+                {
+                    lastCalTry = DateTime.Now;
+                    calibrated = false;
+                    Console.WriteLine("[cal] geometry came from " + v.PivotSource + " - retrying a real calibration");
+                }
                 if (!calibrated)
                 {
                     cfg.PivotX = -1;
