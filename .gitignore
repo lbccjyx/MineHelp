@@ -30,5 +30,11 @@ HookAlerter/_dev/single_ref.cs
 HookAlerter/_dev/single_ref.exe
 HookAlerter/_dev/bounds.csv
 
+# The pre-split single file (173 KB) duplicates source that is now in 10 shards.
+HookAlerter/_dev/*.bak
+
+# Strings dumped out of the game's SWF - game-derived content, not our work.
+HookAlerter/_dev/*_strings.txt
+
 # Large reference screenshots used only for --analyze smoke tests.
 HookAlerter/_dev/ref/*.png
