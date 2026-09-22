@@ -1081,7 +1081,21 @@ namespace HookAlerter
                         // still -37 while the hook was visibly at -66. That is not a clipping
                         // artefact, it is the tracker holding a different object, so the ceiling was
                         // never the cause and the change is not kept.
-                        if (!HookDeployed && dist > BaseR * 1.60) continue;
+                        // 3.0, not 1.60. Comparing the two code paths - which is the only place they
+                        // differ - shows this upper bound is the sole algorithmic difference between
+                        // "at rest" and "deployed", and it is exactly what compresses the angle at
+                        // rest. The hook blob spans a wide range of radii (the candidate dump shows
+                        // n=282 for it); chopping everything beyond 1.60*BaseR = 69.6px leaves only the
+                        // blob's INNER part, which pulls the centroid inward and the angle toward
+                        // vertical - 38 degrees where the truth is 67. Once the hook is fired this
+                        // bound does not apply, the whole blob survives, and the angle is correct:
+                        // the same hook, two readings, differing only by this line.
+                        //
+                        // I did test 2.40 earlier and saw no change - but that run was confounded by
+                        // the 0.80 centroid floor, which was rejecting every frame at the time, so no
+                        // ceiling change could show through. I wrongly recorded the ceiling hypothesis
+                        // as disproved. With the floors fixed this can finally be measured.
+                        if (!HookDeployed && dist > BaseR * 3.00) continue;
                     }
                     bool inRock = false;
                     foreach (Rectangle r0 in StaticRocks)
