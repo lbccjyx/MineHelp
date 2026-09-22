@@ -200,7 +200,12 @@ namespace HookAlerter
             if (!HookDeployed && RestR > 0 && BaseR > 0)
             {
                 double blended = RestR * 0.98 + len * 0.02;
-                RestR = Math.Max(BaseR * 0.75, Math.Min(BaseR * 1.35, blended));
+                // Clamp ceiling 1.25, not 1.35. The deployed latch clears below BaseR*1.30, so a
+                // RestR ceiling of 1.35 let RestR drift into (1.30, 1.35]*BaseR - and then a resting
+                // hook keeps `len` inside the hysteresis band, RestFrames is zeroed every frame, and
+                // the latch can never clear. 1.25 keeps the clamp strictly below the clear threshold.
+                RestR = Math.Max(BaseR * 0.75, Math.Min(BaseR * 1.25, blended));
+
             }
             if (RestR > 0)
             {

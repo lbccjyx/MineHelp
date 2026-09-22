@@ -249,6 +249,9 @@ namespace HookAlerter
                     }
                 }
 
+                // Publish the client width: ArtPivot anchors the pivot X to the client centre, which
+                // is where the winch actually sits. See Vision.ClientW.
+                v.ClientW = cap.ClientScreenRect.Width;
                 bool skipTrack = false;
                 // A fallback pivot is a STOPGAP, not a result. It gives usable geometry but it never
                 // runs LearnObjects, so StaticRocks stays empty - and without that exclusion list

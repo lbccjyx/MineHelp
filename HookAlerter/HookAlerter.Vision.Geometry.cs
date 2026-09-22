@@ -849,6 +849,14 @@ namespace HookAlerter
             return PivotX > 0 && BaseR > 0;
         }
 
+        /// <summary>Client width in pixels, published by the run loop every frame. The winch sits at
+        /// the horizontal CENTRE OF THE CLIENT, which is the anchor the measurements agree on:
+        /// (966,118) at a 1936 client, 965 at 1930. DetectField's field edges are ~9px off, so
+        /// deriving the pivot from (Field.Left+Field.Right)/2 gave 957 and moved the aim 7-11 degrees
+        /// at close radii - a reviewer caught it live: with piv=957 only 5 of 101 resting frames had a
+        /// radius inside the 45..55 invariant band, against 76 of 101 for the client centre.</summary>
+        public int ClientW;
+
         public void ArtPivot()
         {
             // Measured off a real frame: the rope hangs from (966, 118) while Field.Top is 159 and
@@ -856,7 +864,13 @@ namespace HookAlerter
             // line. The old 10.5% put it 47px too high, which skews every angle - and a wrong pivot
             // is exactly what makes a fired hook land well off the target. The value agrees with the
             // successful calibrations, which fitted y=113..119.
-            PivotX = (Field.Left + Field.Right) / 2.0;
+            // Anchor X to the CLIENT CENTRE, not to the detected field's edges. DetectField's edges
+            // are ~9px off on a level frame, so (Field.Left+Field.Right)/2 gave 957 where the truth is
+            // 965 - and a reviewer measured the consequence live: with piv=957 only 5 of 101 resting
+            // frames had a radius inside the 45..55 invariant band, against 76 of 101 for the client
+            // centre. 8px is 7-11 degrees at close radii. Fall back to the field centre only before
+            // any frame has been seen.
+            PivotX = ClientW > 0 ? ClientW / 2.0 : (Field.Left + Field.Right) / 2.0;
             PivotY = Field.Top - Field.Height * 0.049;
             // 0.052, not 0.062. The formula is an ESTIMATE of the resting radius, and it was 20% high:
             // measured resting centroid radius is 42-45px on an 836px field = 0.050-0.054, while
