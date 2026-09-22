@@ -47,10 +47,16 @@ namespace HookAlerter
                 // same reason. The hook IS there, it is just briefly still, so keep the last angle
                 // for a bounded number of frames instead of counting a loss. Bounded, because a
                 // genuine loss must still be detectable.
-                if (HaveAngle && NoHookFrames < 15 && Math.Abs(Omega) < 0.30
+                if (HaveAngle && NoHookFrames < 15
                     && BaseR > 6 && HookR > BaseR * 0.65 && HookR < BaseR * 1.6)
                 {
-                    Reject = "coasting through a turning point";
+                    // No |Omega| condition. The first version required the hook to be nearly
+                    // stationary, but the tracker can lose it while it is still moving fast toward
+                    // the extreme, and then the coast never applied - the counter never appeared in
+                    // any log. The radius band alone is the right test: a hook inside the resting
+                    // band has not been fired, so losing sight of it is a tracking gap, not a shot.
+                    // Still bounded to 15 frames, so a genuine loss stays detectable.
+                    Reject = "coasting (lost sight inside the resting band)";
                     return true;
                 }
                 Reject = Why(string.Format(CultureInfo.InvariantCulture, "no pixels (n={0}) box={1}", cnt, HookBox()));
