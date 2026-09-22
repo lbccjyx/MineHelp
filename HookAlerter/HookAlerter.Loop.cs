@@ -53,6 +53,7 @@ namespace HookAlerter
             DateTime lastRejectLog = DateTime.MinValue;
             DateTime lastTraceLog = DateTime.MinValue;
             DateTime lastCalTry = DateTime.MinValue;
+            DateTime lastNoFocusLog = DateTime.MinValue;
             DateTime lastJumpAt = DateTime.Now, sampleAt = DateTime.Now;
             DateTime lastReturnSeen = DateTime.MinValue;
 
@@ -641,6 +642,18 @@ namespace HookAlerter
                         if (Nat.GetForegroundWindow() != cap.Hwnd)
                         {
                             status += "   [自动出钩: 游戏不在前台]";
+                            // Log it. This refusal lived ONLY in the status bar, so when the user
+                            // asked "the dashed line is there, why is there no shot?", the log had
+                            // no answer at all - [fire] was 0 and nothing said why. The game also
+                            // freezes when it loses focus, which is why the trace heartbeat repeated
+                            // one frozen angle for seconds. Rate limited like the other diagnostics.
+                            if ((DateTime.Now - lastNoFocusLog).TotalSeconds > 2.0)
+                            {
+                                lastNoFocusLog = DateTime.Now;
+                                Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                                    "[hold] ready to fire (aim={0:F2} hook={1:F2} d={2:F2}deg worth=1 dep=0 setl=0) but the game is NOT the foreground window - key withheld",
+                                    aim * 180 / Math.PI, v.Angle * 180 / Math.PI, (v.Angle - aim) * 180 / Math.PI));
+                            }
                         }
                         else
                         {
