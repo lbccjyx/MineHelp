@@ -982,6 +982,7 @@ namespace HookAlerter
                                out double hx, out double hy, out int count)
         {
             double sx = 0, sy = 0; int n = 0;
+            List<int> acc = new List<int>();
             LastCandidates.Clear();
             CandidateMask.Clear();
             int x0 = Math.Max(0, box.Left), x1 = Math.Min(cur.W - 1, box.Right);
@@ -1039,9 +1040,51 @@ namespace HookAlerter
                         if (x >= r0.Left && x <= r0.Right && y >= r0.Top && y <= r0.Bottom) { inRock = true; break; }
                     if (inRock) continue;
                     sx += x; sy += y; n++;
+                    acc.Add(p);
                 }
+            // Take the LARGEST connected blob, not the mean of everything that passed. Summing all
+            // accepted pixels let a 400px hook blob and a handful of stray pixels share one
+            // centroid, which pulls the reported position between two objects - the user saw the
+            // hook at -66 while the tracker reported -37. A live candidate dump shows the two
+            // populations are cleanly separable by SIZE and not by radius:
+            //     n>=200 : 46 blobs   (the hook; median 318px)
+            //     n<30   : 20 blobs   (noise)
+            // while the hook blob's centroid sits at r=32 and the noise at 26-28 - only 4px apart,
+            // so the 0.80*BaseR radius gate could never separate them and in fact cut straight
+            // through the hook blob, which is why the tracked radius read 39-45 instead of 32.
             count = n;
-            if (n >= 12) { hx = sx / n; hy = sy / n; return true; }
+            if (acc.Count >= 12)
+            {
+                List<int> pts = new List<int>(acc);
+                pts.Sort();
+                List<int> best = null;
+                List<int> seen = new List<int>();
+                for (int i = 0; i < pts.Count; i++)
+                {
+                    if (seen.Contains(pts[i])) continue;
+                    List<int> blob = new List<int>();
+                    blob.Add(pts[i]); seen.Add(pts[i]);
+                    for (int k = 0; k < blob.Count; k++)
+                    {
+                        int q = blob[k]; int qx = q % cur.W, qy = q / cur.W;
+                        foreach (int r2 in pts)
+                        {
+                            if (seen.Contains(r2)) continue;
+                            int rx = r2 % cur.W, ry = r2 / cur.W;
+                            if (Math.Abs(rx - qx) <= 2 && Math.Abs(ry - qy) <= 2) { blob.Add(r2); seen.Add(r2); }
+                        }
+                    }
+                    if (best == null || blob.Count > best.Count) best = blob;
+                }
+                if (best != null && best.Count >= 12)
+                {
+                    double bx = 0, by = 0;
+                    for (int k = 0; k < best.Count; k++) { bx += best[k] % cur.W; by += best[k] / cur.W; }
+                    count = best.Count;
+                    hx = bx / best.Count; hy = by / best.Count;
+                    return true;
+                }
+            }
             hx = (x0 + x1) / 2.0; hy = (y0 + y1) / 2.0;
             return false;
         }
