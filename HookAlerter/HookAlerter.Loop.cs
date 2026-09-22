@@ -259,6 +259,7 @@ namespace HookAlerter
                 // because the only retry was gone. So: if the geometry did not come from a real
                 // calibration, keep trying until it does.
                 if (calibrated && v.PivotSource != "ART" && v.PivotSource != "ART+FITr"
+                    && v.ObjectFrac > 0 && v.ObjectFrac <= 0.145
                     && (DateTime.Now - lastCalTry).TotalSeconds > 5.0)
                 {
                     lastCalTry = DateTime.Now;
@@ -294,12 +295,23 @@ namespace HookAlerter
                         // real level frames at up to 13.5% objects and menus from 15.4%, and the
                         // level's own fraction oscillates across any threshold near 0.12 within
                         // seconds, so gating on it strands the tool on a real level.
-                        if (v.FieldGeometrySaneNow())
+                        if (v.FieldGeometrySaneNow() && v.ObjectFrac > 0 && v.ObjectFrac <= 0.145)
                         {
                             v.ArtPivot(); v.PivotSource = "ART";
                             v.RestR = v.BaseR;
                             v.JumpRejects = 0;
                             Console.WriteLine("[cal] skipped (" + v.CalibMessage + ") - measured pivot src=" + v.PivotSource);
+                        }
+                        else if (v.FieldGeometrySaneNow())
+                        {
+                            // Letterbox and size are NOT enough to trust Field as the source of the
+                            // pivot: a menu/shop screen is also letterboxed and also large. A menu
+                            // field of {X=213,Width=1529} has centre 978 while the real one is 966 -
+                            // 12.5px, about 12 degrees at close radii - and a live log showed exactly
+                            // that being computed and then LABELLED src=ART, which hid it. Keep the
+                            // previous pivot instead and let the level test above decide later.
+                            v.PivotSource = "PREV";
+                            Console.WriteLine("[cal] skipped (" + v.CalibMessage + ") - field is not a level, keeping the previous pivot");
                         }
                         else if (v.PivotX <= 0 || v.BaseR <= 0)
                         {
