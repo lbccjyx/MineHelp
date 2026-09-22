@@ -759,41 +759,58 @@ namespace HookAlerter
         public string DescribeCandidates(int w)
         {
             if (CandidateMask.Count == 0) return "none";
-            List<int> pts = new List<int>(CandidateMask);
-            pts.Sort();
-            List<string> parts = new List<string>();
-            List<int> used = new List<int>();
-            for (int i = 0; i < pts.Count && parts.Count < 4; i++)
+            // Same raster+flood approach as HookPixels, for the same reason: the first version was
+            // O(n^3) and would stall the loop for about a second on every call.
+            int minx = int.MaxValue, maxx = 0, miny = int.MaxValue, maxy = 0;
+            for (int i = 0; i < CandidateMask.Count; i++)
             {
-                if (used.Contains(pts[i])) continue;
-                int seed = pts[i];
-                int sx0 = seed % w, sy0 = seed / w;
-                double cx = 0, cy = 0; int cnt = 0;
-                // Bounded flood over the sorted candidate set: a pixel joins the blob if it is
-                // within 3px of one already in it. Cheap and enough to separate the hook from the
-                // winch, which are tens of pixels apart.
-                List<int> blob = new List<int>();
-                blob.Add(seed); used.Add(seed);
-                for (int k = 0; k < blob.Count && blob.Count < 4000; k++)
+                int px = CandidateMask[i] % w, py = CandidateMask[i] / w;
+                if (px < minx) minx = px; if (px > maxx) maxx = px;
+                if (py < miny) miny = py; if (py > maxy) maxy = py;
+            }
+            int bw = maxx - minx + 1, bh = maxy - miny + 1;
+            if (bw <= 0 || bh <= 0 || (long)bw * bh > 4000000) return CandidateMask.Count + " px (too spread to group)";
+            bool[] mask = new bool[bw * bh];
+            for (int i = 0; i < CandidateMask.Count; i++)
+            {
+                int px = CandidateMask[i] % w, py = CandidateMask[i] / w;
+                int mx = px - minx, my = py - miny;
+                if (mx >= 0 && my >= 0 && mx < bw && my < bh) mask[my * bw + mx] = true;
+            }
+            bool[] used = new bool[bw * bh];
+            int[] stack = new int[bw * bh];
+            List<string> parts = new List<string>();
+            for (int i = 0; i < mask.Length && parts.Count < 4; i++)
+            {
+                if (!mask[i] || used[i]) continue;
+                int sp = 0; stack[sp++] = i; used[i] = true;
+                int cnt = 0; double cx = 0, cy = 0;
+                while (sp > 0)
                 {
-                    int q = blob[k];
-                    int qx = q % w, qy = q / w;
-                    foreach (int r in pts)
+                    int q = stack[--sp];
+                    int qx = q % bw, qy = q / bw;
+                    cnt++; cx += qx + minx; cy += qy + miny;
+                    for (int dy = -2; dy <= 2; dy++)
                     {
-                        if (used.Contains(r)) continue;
-                        int rx = r % w, ry = r / w;
-                        if (Math.Abs(rx - qx) <= 3 && Math.Abs(ry - qy) <= 3) { blob.Add(r); used.Add(r); }
+                        int ny = qy + dy;
+                        if (ny < 0 || ny >= bh) continue;
+                        for (int dx = -2; dx <= 2; dx++)
+                        {
+                            int nx = qx + dx;
+                            if (nx < 0 || nx >= bw) continue;
+                            int ni = ny * bw + nx;
+                            if (mask[ni] && !used[ni]) { used[ni] = true; stack[sp++] = ni; }
+                        }
                     }
                 }
-                for (int k = 0; k < blob.Count; k++) { cx += blob[k] % w; cy += blob[k] / w; cnt++; }
                 if (cnt == 0) continue;
                 cx /= cnt; cy /= cnt;
-                double dx = cx - PivotX, dy = cy - PivotY;
+                double dx2 = cx - PivotX, dy2 = cy - PivotY;
                 parts.Add(string.Format(CultureInfo.InvariantCulture,
                     "n={0} c=({1:F0},{2:F0}) ang={3:F1} r={4:F0}",
-                    cnt, cx, cy, Math.Atan2(dx, dy) * 180 / Math.PI, Math.Sqrt(dx * dx + dy * dy)));
+                    cnt, cx, cy, Math.Atan2(dx2, dy2) * 180 / Math.PI, Math.Sqrt(dx2 * dx2 + dy2 * dy2)));
             }
-            return string.Join(" | ", parts.ToArray());
+            return parts.Count == 0 ? "none" : string.Join(" | ", parts.ToArray());
         }
         /// <summary>Why the last TrackHook call gave up; empty on success. Logged (rate limited) by
         /// the run loop, because previously NO log field recorded a tracking failure at all - the
@@ -1055,34 +1072,54 @@ namespace HookAlerter
             count = n;
             if (acc.Count >= 12)
             {
-                List<int> pts = new List<int>(acc);
-                pts.Sort();
-                List<int> best = null;
-                List<int> seen = new List<int>();
-                for (int i = 0; i < pts.Count; i++)
+                // Raster mask + stack flood fill. The first version grouped blobs with
+                // List.Contains inside a loop over the whole point list, which is O(n^3) - about
+                // 10^8 operations per frame at n~1000, and it runs EVERY frame. That would have
+                // dropped frames, and a dropped frame loses the hook. This is O(mask pixels * 25).
+                int bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+                if (bw > 0 && bh > 0)
                 {
-                    if (seen.Contains(pts[i])) continue;
-                    List<int> blob = new List<int>();
-                    blob.Add(pts[i]); seen.Add(pts[i]);
-                    for (int k = 0; k < blob.Count; k++)
+                    bool[] mask = new bool[bw * bh];
+                    for (int i = 0; i < acc.Count; i++)
                     {
-                        int q = blob[k]; int qx = q % cur.W, qy = q / cur.W;
-                        foreach (int r2 in pts)
-                        {
-                            if (seen.Contains(r2)) continue;
-                            int rx = r2 % cur.W, ry = r2 / cur.W;
-                            if (Math.Abs(rx - qx) <= 2 && Math.Abs(ry - qy) <= 2) { blob.Add(r2); seen.Add(r2); }
-                        }
+                        int px = acc[i] % cur.W, py = acc[i] / cur.W;
+                        int mx = px - x0, my = py - y0;
+                        if (mx >= 0 && my >= 0 && mx < bw && my < bh) mask[my * bw + mx] = true;
                     }
-                    if (best == null || blob.Count > best.Count) best = blob;
-                }
-                if (best != null && best.Count >= 12)
-                {
-                    double bx = 0, by = 0;
-                    for (int k = 0; k < best.Count; k++) { bx += best[k] % cur.W; by += best[k] / cur.W; }
-                    count = best.Count;
-                    hx = bx / best.Count; hy = by / best.Count;
-                    return true;
+                    bool[] used = new bool[bw * bh];
+                    int[] stack = new int[bw * bh];
+                    int bestCount = 0; double bx = 0, by = 0;
+                    for (int i = 0; i < mask.Length; i++)
+                    {
+                        if (!mask[i] || used[i]) continue;
+                        int sp = 0; stack[sp++] = i; used[i] = true;
+                        int cnt2 = 0; double sx2 = 0, sy2 = 0;
+                        while (sp > 0)
+                        {
+                            int q = stack[--sp];
+                            int qx = q % bw, qy = q / bw;
+                            cnt2++; sx2 += qx + x0; sy2 += qy + y0;
+                            for (int dy = -2; dy <= 2; dy++)
+                            {
+                                int ny = qy + dy;
+                                if (ny < 0 || ny >= bh) continue;
+                                for (int dx = -2; dx <= 2; dx++)
+                                {
+                                    int nx = qx + dx;
+                                    if (nx < 0 || nx >= bw) continue;
+                                    int ni = ny * bw + nx;
+                                    if (mask[ni] && !used[ni]) { used[ni] = true; stack[sp++] = ni; }
+                                }
+                            }
+                        }
+                        if (cnt2 > bestCount) { bestCount = cnt2; bx = sx2; by = sy2; }
+                    }
+                    if (bestCount >= 12)
+                    {
+                        count = bestCount;
+                        hx = bx / bestCount; hy = by / bestCount;
+                        return true;
+                    }
                 }
             }
             hx = (x0 + x1) / 2.0; hy = (y0 + y1) / 2.0;
