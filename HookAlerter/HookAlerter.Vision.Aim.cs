@@ -127,9 +127,18 @@ namespace HookAlerter
             //    exceed it. (0.80 * 2.0 = 1.60 is exactly the pixel ceiling, which is the real
             //    reason the deploy latch cannot be reached by swing noise.) Dead guards only give
             //    false confidence.
-            if (BaseR > 6 && len < BaseR * 0.80)
+            // 0.40, matching the pixel floor in HookPixels. This is the SECOND floor and it was the
+            // one actually blocking: HookPixels was lowered to 0.40 but this gate stayed at 0.80, so
+            // every frame was rejected with
+            //     [miss] centroid r=32.6 < 34.8 (0.80*BaseR)
+            // more than fifty times in a single session. The hook blob's centroid really is at
+            // r=32-34 (the rope shares the blob and pulls the centroid inward from BaseR=43.5), so a
+            // 34.8 floor rejects the hook every single frame and the tracker never advances - which
+            // is why v.Angle sat frozen at two values while HookPixels was correctly finding a
+            // 400px blob at the right angle.
+            if (BaseR > 6 && len < BaseR * 0.40)
             {
-                Reject = Why(string.Format(CultureInfo.InvariantCulture, "centroid r={0:F1} < {1:F1} (0.80*BaseR)", len, BaseR * 0.80));
+                Reject = Why(string.Format(CultureInfo.InvariantCulture, "centroid r={0:F1} < {1:F1} (0.40*BaseR)", len, BaseR * 0.40));
                 LostFrames++; return false;
             }
 
