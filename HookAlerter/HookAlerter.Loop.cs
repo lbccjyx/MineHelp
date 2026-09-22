@@ -262,7 +262,8 @@ namespace HookAlerter
                         {
                             v.ArtPivot(); v.PivotSource = "ART";
                             v.RestR = v.BaseR;
-                            Console.WriteLine("[cal] skipped (" + v.CalibMessage + ") - measured pivot");
+                            v.JumpRejects = 0;
+                            Console.WriteLine("[cal] skipped (" + v.CalibMessage + ") - measured pivot src=" + v.PivotSource);
                         }
                         else if (v.PivotX <= 0 || v.BaseR <= 0)
                         {

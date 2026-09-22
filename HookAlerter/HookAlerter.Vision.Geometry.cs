@@ -620,18 +620,26 @@ namespace HookAlerter
             // Refining the arc RADIUS is useful; deciding where the centre is, is not.
             ArtPivot();
             double artR = BaseR;
-            bool useFitR = fitted && Math.Abs(fitR - artR) <= 0.20 * artR;
+            // 5%, not 20%. The centroid floor is 0.80*BaseR, so an inflated BaseR lifts the floor
+            // ABOVE the real resting radius and the tracker goes blind. Measured breaking point:
+            // at +20% (fitR 52.2) the floor is 41.8 while the measured resting minimum is 38.1,
+            // i.e. anything from fitR >= 47.6 breaks it - and real logs contain fits at r=47/51/52/53.
+            // At +-5% BaseR stays in 41.3..45.7, so 0.80*BaseR is 33.0..36.6, always below the
+            // measured resting band of 38.1..50.9. The fit only refines the radius; it must not move it far.
+            bool useFitR = fitted && Math.Abs(fitR - artR) <= 0.05 * artR;
             if (useFitR) BaseR = fitR;
+            PivotSource = useFitR ? "ART+FITr" : "ART";     // the successful path must name its source too
             bool useFit = false;                 // kept for the log line below
             Log.WriteLine(string.Format(CultureInfo.InvariantCulture,
                 "[cal] fit  pivot=({0:F0},{1:F0}) r={2:F0} spread={3:F1} ok={4}", fitX, fitY, fitR, err, fitted));
             Log.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                "[cal] art  pivot=({0:F0},{1:F0}) r={2:F0}   -> using {3}",
-                PivotX, PivotY, artR, useFitR ? "ART+FITr" : "ART"));
+                "[cal] art  pivot=({0:F0},{1:F0}) r={2:F0}   -> using {3}  src={4}",
+                PivotX, PivotY, artR, useFitR ? "ART+FITr" : "ART", PivotSource));
             if (useFit) { PivotX = fitX; PivotY = fitY; BaseR = fitR; }
             SaveCalibDump(prev, null);
             RestR = BaseR;
             HookDeployed = false; LostFrames = 0; HaveAngle = false; NoHookFrames = 0;
+            JumpRejects = 0;
             Angle = 0; Omega = 0; MinAngle = -1.6; MaxAngle = 1.6;
             LastAccept = DateTime.Now;
 
@@ -733,6 +741,12 @@ namespace HookAlerter
             return false;
         }
 
+        /// <summary>DEPRECATED, no longer read. The continuity gate used to consult
+        /// `LostFrames &lt; 3` for a three-strike grace period, but LostFrames is zeroed at the top of
+        /// TrackHook on every successful HookPixels and every rejecting gate returns immediately, so
+        /// it never accumulated and the clause was permanently true - a dead grace period. Replaced
+        /// by JumpRejects, which is incremented only on a jump reject. Kept (and still written) only
+        /// because removing it would touch seven call sites; it has no effect on behaviour.</summary>
         public int LostFrames;
         /// <summary>Why the last TrackHook call gave up; empty on success. Logged (rate limited) by
         /// the run loop, because previously NO log field recorded a tracking failure at all - the
@@ -810,6 +824,13 @@ namespace HookAlerter
             return berr < 8.0;
         }
 
+        /// <summary>Where the current pivot came from: ART or ART+FITr (measured on a sane level
+        /// field), CLIENT (fallback from the client size), PREV (kept from an earlier run), NONE
+        /// (fallback also failed). Initialised to "?" meaning "nothing has run yet". Logged on every
+        /// calibration attempt - a wrong pivot is this tool's most damaging failure (31px was worth
+        /// 23 degrees of angle) and it was previously untraceable.</summary>
+        public string PivotSource = "?";
+
         // Fallback pivot straight from the game's fixed art: the winch sits at the horizontal
         // centre of the field, a little above the dirt line, on a short cable.
         /// <summary>Derive a usable Field from the client size alone, for when no level frame has
@@ -819,12 +840,6 @@ namespace HookAlerter
         /// point in the loop, so it returned immediately while the caller printed a success message
         /// - a log that claims work it did not do is worse than no log at all. Returns whether it
         /// actually produced a geometry.</summary>
-        /// <summary>Where the current pivot came from: ART (measured on a sane level field),
-        /// CLIENT (fallback from the client size), or PREV (kept from an earlier run). Logged on
-        /// every calibration attempt - without it the pivot is untraceable, and a wrong pivot is
-        /// the single most damaging failure this tool has (31px was worth 23 degrees of angle).</summary>
-        public string PivotSource = "?";
-
         public bool ArtPivotFromClient(Frame f)
         {
             if (f == null || f.W < 64 || f.H < 64) return false;

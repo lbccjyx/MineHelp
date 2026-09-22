@@ -58,9 +58,12 @@ namespace HookAlerter
                     // position lets the nearLine + settledOnIt path fire on a spot the tracker
                     // never observed. Leaving it false makes the next accepted frame establish a
                     // real angle before anything can fire.
+                    // Capture the state BEFORE clearing it, otherwise this line always reports
+                    // dep=0 noHook=0 and hides the very 60-frame blindness it exists to report.
+                    Reject = Why("blind for 3s - re-seeded the search box at rest");
                     HookDeployed = false;
                     NoHookFrames = 0;
-                    Reject = Why("blind for 3s - re-seeded the search box at rest");
+                    JumpRejects = 0;
                 }
                 return HaveAngle;
             }
@@ -143,6 +146,8 @@ namespace HookAlerter
             // deployed it is far out. A tiny radius means we latched onto something at the winch.
             if (RestR > 0 && len < RestR * 0.35)
             {
+                Reject = Why(string.Format(CultureInfo.InvariantCulture,
+                    "r={0:F1} below 0.35*RestR={1:F1}", len, RestR * 0.35));
                 LostFrames++;
                 return false;
             }
