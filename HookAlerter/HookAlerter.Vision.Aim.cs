@@ -39,7 +39,19 @@ namespace HookAlerter
             {
                 Reject = Why(string.Format(CultureInfo.InvariantCulture, "no pixels (n={0}) box={1}", cnt, HookBox()));
                 NoHookFrames++;
-                if (NoHookFrames > 6) HookDeployed = true;
+                // Losing the hook does NOT mean it was fired. This used to latch "deployed" on 7
+                // blind frames with no radius evidence at all, and that single line caused two
+                // separate user-visible failures in one live round:
+                //   * `ready` requires !HookDeployed, so every sweep through the pointer line while
+                //     the tracker was briefly blind was silently suppressed - the big gold on the
+                //     left never auto-fired.
+                //   * the flight measurement needs HookDeployed && HookR > 55. Measured over that
+                //     round: dep=1 frames had a MEDIAN radius of 38.3px (max 60.4), i.e. the latch
+                //     was mostly set at rest, so flight was measured 0 times in 8 shots and `lead`
+                //     never learned - which is exactly why the first shot at a new target is always
+                //     off and the second one lands.
+                // Require the radius to have been genuinely large before believing a shot happened.
+                if (NoHookFrames > 6 && RestR > 6 && HookR > RestR * 1.6) HookDeployed = true;
                 if (NoHookFrames > 45) { HaveAngle = false; LostFrames = 45; }
                 // RECOVERY. Nothing used to pull the tracker out of this state, so a single bad
                 // stretch could blind it permanently: HookBox() is centred on the last predicted
