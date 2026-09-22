@@ -1043,7 +1043,18 @@ namespace HookAlerter
                         // only updated at the end of this routine, so a frame that transiently
                         // believed "deployed" used to skip the whole test and admit a blob 26px out
                         // - which then fired two shots wildly off target.
-                        if (dist < BaseR * 0.80) continue;
+                        // 0.40, not 0.80. BaseR is 43.5 but the hook blob's centroid measures 32 -
+                        // the rope shares the blob and drags the centroid inward - so a 0.80 floor at
+                        // 34.8 rejected the hook's CORE and kept only a few outer pixels. The blob
+                        // then lost the largest-blob contest to another object, which is why picked
+                        // stayed at -35.6 while the n=220 hook blob sat at -64.3. Measured proof
+                        // from the candidate dump: picked ang=-35.6 r=44 while the hook blob was
+                        // n=220 c=(936,132) ang=-64.3 r=32.
+                        //
+                        // The floor no longer has to separate hook from noise: blob SIZE does that
+                        // cleanly (46 blobs n>=200 against 20 blobs n<30 in one session). It only has
+                        // to keep the winch and the miner out, and those sit inside 0.40*BaseR.
+                        if (dist < BaseR * 0.40) continue;
                         // REVERTED to 1.60. Widening it to 2.40 was a HYPOTHESIS - that rope pixels
                         // drag the centroid outward at wide angles and the ceiling was clipping the
                         // swing - and the user disproved it on the next run: the tracked angle was
