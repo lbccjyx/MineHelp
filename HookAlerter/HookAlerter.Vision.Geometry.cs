@@ -760,6 +760,20 @@ namespace HookAlerter
         /// actually were.</summary>
         public int LastAcc, LastBest, LastRocks;
 
+        /// <summary>The static-grey rectangles that HookPixels subtracts. The calibration reports
+        /// excluding 5 of them, and the hook hangs directly below the winch - so if one of these
+        /// rectangles covers the hook's resting place, every hook pixel is removed before any gate
+        /// runs and HookPixels falls through to the search-box centre. That is the leading
+        /// explanation for `picked` showing only two constant values that match no blob.</summary>
+        public string DescribeRocks()
+        {
+            if (StaticRocks.Count == 0) return "none";
+            List<string> p = new List<string>();
+            foreach (Rectangle r in StaticRocks)
+                p.Add(string.Format(CultureInfo.InvariantCulture, "({0},{1})-({2},{3})", r.Left, r.Top, r.Right, r.Bottom));
+            return string.Join(" ", p.ToArray());
+        }
+
         /// <summary>Summarise the candidate pixels as blobs with their radius and angle from the
         /// pivot, so the run loop can log what the tracker had to choose from.</summary>
         public string DescribeCandidates(int w)
