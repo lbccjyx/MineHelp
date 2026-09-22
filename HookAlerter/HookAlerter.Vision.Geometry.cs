@@ -753,6 +753,12 @@ namespace HookAlerter
         /// could see the hook at -66 while the tracker reported -37, and nothing in any log said
         /// what else was on offer.</summary>
         public List<int> CandidateMask = new List<int>();
+        /// <summary>Diagnostics for the [cand] line: accepted pixel count, largest blob size, and
+        /// how many static rocks are being excluded. Without these the [cand] output could not
+        /// distinguish "the blob logic picked wrong" from "no blob at all, so HookPixels fell
+        /// through to the search-box centre" - which is what the constant +32.6/-31.9 picked values
+        /// actually were.</summary>
+        public int LastAcc, LastBest, LastRocks;
 
         /// <summary>Summarise the candidate pixels as blobs with their radius and angle from the
         /// pivot, so the run loop can log what the tracker had to choose from.</summary>
@@ -1081,6 +1087,9 @@ namespace HookAlerter
             // so the 0.80*BaseR radius gate could never separate them and in fact cut straight
             // through the hook blob, which is why the tracked radius read 39-45 instead of 32.
             count = n;
+            LastAcc = acc.Count;
+            LastBest = 0;
+            LastRocks = StaticRocks.Count;
             if (acc.Count >= 12)
             {
                 // Raster mask + stack flood fill. The first version grouped blobs with
@@ -1125,6 +1134,7 @@ namespace HookAlerter
                         }
                         if (cnt2 > bestCount) { bestCount = cnt2; bx = sx2; by = sy2; }
                     }
+                    LastBest = bestCount;
                     if (bestCount >= 12)
                     {
                         count = bestCount;

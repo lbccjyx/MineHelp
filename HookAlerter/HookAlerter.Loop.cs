@@ -732,8 +732,9 @@ namespace HookAlerter
                             // flooding the log.
                             lastCandLog = DateTime.Now;
                             Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                                "[cand] picked ang={0:F1} r={1:F0} | blobs: {2}",
+                                "[cand] picked ang={0:F1} r={1:F0} acc={2} best={3} rocks={4} | blobs: {5}",
                                 v.Angle * 180 / Math.PI, v.HookR,
+                                v.LastAcc, v.LastBest, v.LastRocks,
                                 v.DescribeCandidates(cap.ClientScreenRect.Width > 0 ? cap.ClientScreenRect.Width : 1930)));
                         }
                         else if ((DateTime.Now - lastTraceLog).TotalSeconds > 1.0 && haveTarget)
