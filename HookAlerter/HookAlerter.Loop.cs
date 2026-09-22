@@ -79,16 +79,17 @@ namespace HookAlerter
             if (cfg.PivotX > 0 && cfg.PivotY > 0 && cfg.Radius > 0 && (cfg.ManualGeometry || sizeMatches))
             {
                 v.PivotX = cfg.PivotX; v.PivotY = cfg.PivotY;
-                // Clamp the saved radius. Config.Save persists whatever radius was adopted, and an
-                // older build persisted fits of 47..52 (the +-20% rule, |52-43.5| <= 8.7). The
-                // centroid floor is 0.80*BaseR, so such a radius gives a floor of 37.6..41.6 that
-                // crosses the measured resting minimum of 38.1 and blinds the tracker - and this
-                // path never calls Calibrate, so the new +-5% window cannot help. Derive the legal
-                // band from the field height instead of trusting the file.
-                double legal = v.Field.Height > 0 ? v.Field.Height * 0.052 : 0;
+                // Derive the legal band from the CONFIG, not from v.Field. At this point v.Field is
+                // still Rectangle.Empty - Vision's only constructor does not initialise it and every
+                // assignment happens later in the loop - so reading v.Field.Height here yields 0, the
+                // whole clamp silently never runs, and the 47..52 hole stays open. A reviewer caught
+                // exactly that. The cfg field extents are already in hand.
+                double legal = (cfg.FieldB > cfg.FieldT) ? (cfg.FieldB - cfg.FieldT) * 0.052 : 0;
                 if (legal > 0 && (cfg.Radius < legal * 0.95 || cfg.Radius > legal * 1.05))
                 {
-                    Console.WriteLine("[cfg] saved radius " + cfg.Radius + " is outside the legal band of " + legal.ToString("F1") + " - ignoring it, will recalibrate");
+                    Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                        "[cfg] saved radius {0} is outside the legal band {1:F1}..{2:F1} - ignoring it, will recalibrate",
+                        cfg.Radius, legal * 0.95, legal * 1.05));
                     goto skipSavedPivot;
                 }
                 v.BaseR = cfg.Radius;
@@ -546,13 +547,13 @@ namespace HookAlerter
                     // back, and it fired again while the rope was still out. Require the radius to be
                     // near rest as well - that combination really is a dead track.
                     // The ceiling has to be genuinely NEAR the pivot, not merely "not far". The
-                    // deployed latch trips at len > RestR*1.45 (~68px) while this test accepted
-                    // anything under BaseR*1.8 (~84px), so a tracked length in that 68..84 band
+                    // deployed latch trips at len > RestR*2.0 (81px) while this test accepted
+                    // anything under BaseR*1.8 (~84px), so a tracked length in that band
                     // satisfied BOTH tests: the latch set itself, this released it, the latch set
                     // again - an oscillation that printed a run of 26 identical [stuck] lines and, by
                     // rewriting LastReturn every frame, kept the settle window permanently armed.
                     // ONE-SHOT. Making the two radius intervals disjoint was not enough, because one
-                    // of them moves: the deployed latch trips at len > RestR*1.45 and RestR adapts
+                    // of them moves: the deployed latch trips at len > RestR*2.0 and RestR adapts
                     // anywhere in BaseR*0.75..1.35, so when RestR drifts low its threshold falls back
                     // inside this test's ceiling and the oscillation returns. The live log showed 36
                     // [stuck] lines inside a single level and ZERO shots, because each release

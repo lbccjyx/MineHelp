@@ -92,9 +92,12 @@ namespace HookAlerter
 
         public void Save(string path)
         {
-            // Deliberately does NOT persist pivot / radius / field. Those are re-derived by
-            // calibration on every start; writing them back means one bad calibration would
-            // poison every later run. Hand-edit them here only if you want to skip calibration.
+            // Does NOT normally persist pivot / radius / field - they are re-derived by calibration
+            // on every start, and writing them back means one bad calibration would poison every
+            // later run. BUT it DOES write them when ManualGeometry or GeometryTrusted is set (the
+            // write block below), which is how an older build's adopted fit of 47..52 could end up
+            // in the ini. That is why RunLoop clamps the saved radius on load - and why this comment
+            // previously hid the very path a reviewer needed to see.
             StringBuilder sb = new StringBuilder();
             sb.AppendLine("# HookAlerter config. Close the tool before hand-editing.");
             sb.AppendLine("# Hotkeys: F6 type lead | F7 on/off | F8 recalibrate | F9 debug frame | F10/F11 lead -/+10ms");
